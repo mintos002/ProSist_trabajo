@@ -1,12 +1,12 @@
 #include <stdio.h>
 
 typedef struct piezas{
-  long tGeneracion;
+  long tNacido;
   long tEntrada;
   int tBarnizado;
   int tSecado;
   int tCocido;
   int tTotal;
   int linea;
-  char etiqueta[22];
+  char nombre[30];
 } piezas;

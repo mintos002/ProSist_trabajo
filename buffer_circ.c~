@@ -2,30 +2,31 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include "buffer_circ.h"
+//#include "piezas.c"
 
-struct Buffer_Circ {  // Definir estructura Buffer_Circ
+#define BUFSIZE 10  // Tamaño de buff_circular
+int ok;             // definir ok 
+pthread_mutex_t buffer_lock = PTHREAD_MUTEX_INITIALIZER; // Iniciar mutex
+
+typedef struct Buffer_Circ {  // Definir estructura Buffer_Circ
   int buffer[BUFSIZE];
   int bufIN, bufOUT;
   int contador;
-};
+} Buffer_Circ;
 
 // Iniciar bufer
 void initbuffer( struct Buffer_Circ *buff) {
   /*CON MUTEX:*/                              //-------------------------------
   pthread_mutex_lock(&buffer_lock);           // Bloquear mutex
-  int i;                                                                               
-  for(i=0; i<BUFSIZE; i++){
-    (*buff).buffer[i] = -1;
-  }
-    (*buff).bufIN = 0;
-    (*buff).bufOUT = 0;
-    (*buff).contador = 0;
-    /*CON MUTEX:*/                         
-    pthread_mutex_unlock(&buffer_lock);       // Desbloquear mutex
+  (*buff).bufIN = 0;
+  (*buff).bufOUT = 0;
+  (*buff).contador = 0;
+  /*CON MUTEX:*/                         
+  pthread_mutex_unlock(&buffer_lock);       // Desbloquear mutex
 }
 
 // Get item
-int get_item(int* x, struct Buffer_Circ *buff) {
+int get_item(int * x, struct Buffer_Circ *buff) {
   int nxtOUT = (*buff).bufOUT % BUFSIZE;
 
   /*CON MUTEX:*/                              //-------------------------------
@@ -109,13 +110,15 @@ bool bc_lleno(struct Buffer_Circ *buff){
 void print (struct Buffer_Circ *buff){
   /*CON MUTEX:*/                              //------------------------------
   pthread_mutex_lock(&buffer_lock);           // Bloquear mutex
-  // printf("OK? = %d\n", ok );
-  printf("bufIN = %d\n", (*buff).bufIN );
-  printf("bufOUT = %d\n", (*buff).bufOUT );
-  printf("contador = %d\n", (*buff).contador );
-  int i;
-  for(i=0; i<BUFSIZE; i++){
-    printf("Posicion %d valor: %d\n", i, (*buff).buffer[i] );
+
+  printf("Numero de pieza = %d\n", (*buff).contador );
+  if( (*buff).contador != 0 ){                // Si hay pieza
+    int i, bo=(*buff).bufOUT;
+    for(i=0; i<(*buff).contador; i++){
+      bo=bo%BUFSIZE;
+      //printf("%s (linea: %d)\n", (*buff).buffer[bo].nombre, (*buff).buffer[bo].linea );
+      bo++;
+    }
   }
   printf("------------------------------------------------------------\n");
   /*CON MUTEX:*/                            //----------------------------                        
@@ -128,5 +131,5 @@ int num_elementos (struct Buffer_Circ *buff){
  pthread_mutex_lock(&buffer_lock);         // Bloquear mutex
  /*CON MUTEX:*/                            //----------------------------                        
  pthread_mutex_unlock(&buffer_lock);       // Desbloquear mutex
- return buff->contador;
+ return (*buff).contador;
 }
