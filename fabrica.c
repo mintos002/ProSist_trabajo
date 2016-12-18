@@ -10,18 +10,20 @@
 #include <time.h>
 #include "buffer_circ.h"
 
-#define TG1 3         // Definir tiempos
-#define TG2 2
-#define TP1 5
-#define TP2 4
-#define TP3 10
-#define TP4 15
-#define TP5 13
-#define TSTATUS 1
-#define NUMPIEZAS 11  // Definir n piezas
-#define TDEFBAR 2     // Tiempo (seg) barnizado defectuoso
-#define TDEFSEC 4     // Tiempo (seg) secado defectuoso
-#define TDEFCOC 6     // Tiempo (seg) cocido defectuoso
+#define TG1 3.0         // Definir tiempos
+#define TG2 2.0
+#define TP1 5.0
+#define TP2 4.0
+#define TP3 10.0
+#define TP4 15.0
+#define TP5 13.0
+#define TSTATUS 1.0
+#define NUMPIEZAS 12  // Definir n piezas
+#define TDEFBAR 2.0     // Tiempo (seg) barnizado defectuoso
+#define TDEFSEC 4.0     // Tiempo (seg) secado defectuoso
+#define TDEFCOC 6.0     // Tiempo (seg) cocido defectuoso
+
+#define uS2S 1.0E6
 
 int nEntradas = 0;
 int nSacadas = 0;
@@ -72,27 +74,75 @@ void *generaPiezas1(void *args){                    // Generar piezas cada TG1 s
   int err;
   while(nEntradas < NUMPIEZAS){                     // Mientras queden piezas por generar
     pieza.linea = 1;                                // La pieza es de la linea 1
-    pieza.tNacido = getCurrentMicroseconds();       // Iniciar t entrada
-    
+    pieza.tNacido = getCurrentMicroseconds();       // Iniciar t nacido
+    pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
     pthread_mutex_lock(&nEntradas_mutex);            // Bloquear zona critica
-    
     nEntradas++;                                    // Se genera otra pieza
     sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distinguirla
-    pthread_mutex_unlock(&nEntradas_mutex);          // Desbloqueamos zona critica
     
+    pthread_mutex_unlock(&nEntradas_mutex);          // Desbloqueamos zona critica   
     sem_wait(&huecos1);                             // Esperar el hueco
-    printf("\n\n\nAKKKKKKAN\n\n\n");
+    if(bc_lleno(&almacen1)){}
     err = put_item(pieza, &almacen1);               // Se inserta el dato en el almacen1
-    if(err==-1){
+    if(err == -1){
       printf("ERROR: No se ha podido insertar la pieza en Almacen1\n");
-    
       sem_post(&piezas1);                           // Postear pieza
     }
     else{
-      pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
-      sem_post(&piezas1);                             // Postear pieza
+      sem_post(&piezas1);                           // Postear pieza
     }
     sleep(TG1);                                     // Espera para generar otra pieza
+  }//end_while
+}
+
+void *barnSec1 (void *args){
+  pieza pieza;
+  int err1, err2, err3;
+  float tBarnizado;
+  while(1){
+    sem_wait(&piezas1);                               // Esperar a que haya pieza    
+    err1 = obten_valor(&pieza,&almacen1);             // Obtener propiedades de la pieza    
+    if(err1==-1){                                      // Si no hay error
+      printf("ERROR: No se ha podido valorar la pieza en Almacen1\n");     
+      sem_post(&piezas1);                             // Postear pieza
+    }
+    else{
+      sem_post(&piezas1);                             // Postear pieza   
+      tBarnizado = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de barnizado en seg
+      if(tBarnizado>=TP1){                            // No extraer la pieza hasta pasados TP1 seg     
+        sem_wait(&piezas1);                           // Esperar piezas1
+        err2 = get_item(&pieza,&almacen1);            // Sacar las pieza 
+        if(err2==-1){
+          printf("ERROR: No se ha podido extraer la pieza en Almacen1\n");
+          sem_post(&huecos1);                         // Postear huecos2
+        }
+        else{       
+          sem_post(&huecos1);                           // Postear huecos1
+          if(tBarnizado>TP1+TDEFBAR){                 // Si se sobrepasa del tiempo maximo   
+            pthread_mutex_lock(&nEntradas_mutex);     // Bloquear zona critica       
+            nEntradas--;                              // Descartar de nEntradas
+            pthread_mutex_unlock(&nEntradas_mutex);   //Desbloquear zona critica
+            pthread_mutex_lock(&nDescartadas_mutex);  // Bloquear zona critica
+            nDescartadas++;                           // Anyadir a nDescartadas
+            pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
+          }
+          else{
+            pieza.tBarnizado = tBarnizado;            // Anyadir tBarnizado a pieza
+            pieza.tEntrada = getCurrentMicroseconds();
+            sem_wait(&huecos3);                       // Esperar a que haya hueco en almazen3
+            err3 = put_item(pieza,&almacen3);         // Poner piezas en almecen2
+            if(err3==-1){
+              printf("ERROR: No se ha podido insertar la pieza en Almacen3\n");
+              sem_post(&piezas3);                     // Postear piezas3
+            }
+            else{
+              sem_post(&piezas3);
+            }
+          }//end_err3
+        }//end_err2
+      }//end_err1
+    }
+    usleep(500000);    
   }//end_while
 }
 
@@ -101,8 +151,9 @@ void *generaPiezas2(void *args){                    // Generar piezas cada TG2 s
   int err;
   while(nEntradas < NUMPIEZAS){                     // Mientras queden piezas por generar
     pieza.linea = 2;                                // La pieza es de la linea 1
-    pieza.tNacido = getCurrentMicroseconds();       // Iniciar t entrada
-    pthread_mutex_lock(&nEntradas_mutex);           // Bloquear zona critica
+    pieza.tNacido = getCurrentMicroseconds();       // Iniciar t nacido
+    pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
+    pthread_mutex_lock(&nEntradas_mutex);           // Bloquear zona critica 
     nEntradas++;                                    // Se genera otra pieza
     sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distinguirla 
     pthread_mutex_unlock(&nEntradas_mutex);         // Desbloquear zona critica
@@ -113,62 +164,10 @@ void *generaPiezas2(void *args){                    // Generar piezas cada TG2 s
       sem_post(&piezas2);                           // Postear pieza
     }
     else{
-      pieza.tEntrada = getCurrentMicroseconds();    // Iniciar t entrada
       sem_post(&piezas2);                           // Postear pieza
     }
     sleep(TG2);                                     // Espera para generar otra pieza
   }
-}
-
-void *barnSec1 (void *args){
-  pieza pieza;
-  int err1, err2, err3;
-  float tBarnizado;
-  while(1){
-    sem_wait(&piezas1);                               // Esperar a que haya pieza    
-    err1 = obten_valor(&pieza,&almacen1);             // Obtener propiedades de la pieza    
-    if(err1==-1){                                     // Si hay error
-      printf("ERROR: No se ha podido valorar la pieza en Almacen1\n");     
-      sem_post(&piezas1);                             // Postear pieza
-    }
-    else{                                             // Si no hay error
-      sem_post(&piezas1);                             // Postear pieza   
-      tBarnizado = (getCurrentMicroseconds()-pieza.tEntrada)/1000000;  // Sacar tiempo de barnizado en seg
-      if(tBarnizado<=TP1){                            // No extraer la pieza hasta pasados TP1 seg     
-        sem_wait(&piezas1);                           // Esperar piezas1
-        err2 = get_item(&pieza,&almacen1);            // Sacar las pieza
-        if(err2==-1){
-          printf("ERROR: No se ha podido extraer la pieza en Almacen1\n");
-          sem_post(&huecos1);                         // Postear huecos1
-        }
-        else{
-          sem_post(&huecos1);                         // Postear huecos1
-          if(tBarnizado<TP1+TDEFBAR){                 // Si se sobrepasa del tiempo maximo   
-            pthread_mutex_lock(&nEntradas_mutex);     // Bloquear zona critica       
-            nEntradas--;                              // Descartar de nEntradas
-            pthread_mutex_unlock(&nEntradas_mutex);   //Desbloquear zona critica
-            pthread_mutex_lock(&nDescartadas_mutex);  // Bloquear zona critica
-            nDescartadas++;                           // Anyadir a nDescartadas
-            pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
-          }
-          else {
-            pieza.tBarnizado = tBarnizado;            // Anyadir tBarnizado a pieza
-          	sem_wait(&huecos3);                       // Esperar a que haya hueco en almazen3
-            err3 = put_item(pieza,&almacen3);         // Poner piezas en almecen2
-            if(err3==-1){
-              printf("ERROR: No se ha podido insertar la pieza en Almacen3\n");
-              sem_post(&piezas3);                     // Postear piezas3
-            }
-            else{
-              pieza.tEntrada = getCurrentMicroseconds();
-              sem_post(&piezas3);                     // Postear piezas3
-            }
-          }
-        }
-      }
-    }
-    usleep(500000);    
-  }//end_while
 }
 
 void *barnSec2 (void *args){
@@ -179,22 +178,22 @@ void *barnSec2 (void *args){
     sem_wait(&piezas2);                               // Esperar a que haya pieza    
     err1 = obten_valor(&pieza,&almacen2);             // Obtener propiedades de la pieza    
     if(err1==-1){                                     // Si hay error
-      printf("ERROR: No se ha podido valorar la pieza en Almacen1\n");     
+      printf("ERROR: No se ha podido valorar la pieza en Almacen2\n");     
       sem_post(&piezas2);                             // Postear pieza
     }
     else{                                             // Si no hay error
       sem_post(&piezas2);                             // Postear pieza   
-      tBarnizado = (getCurrentMicroseconds()-pieza.tEntrada)/1000000;  // Sacar tiempo de barnizado en seg
-      if(tBarnizado<=TP2){                            // No extraer la pieza hasta pasados TP1 seg     
+      tBarnizado = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de barnizado en seg
+      if(tBarnizado>=TP2){                            // No extraer la pieza hasta pasados TP1 seg     
         sem_wait(&piezas2);                           // Esperar piezas1
         err2 = get_item(&pieza,&almacen2);            // Sacar las pieza
         if(err2==-1){
-          printf("ERROR: No se ha podido extraer la pieza en Almacen1\n");
+          printf("ERROR: No se ha podido extraer la pieza en Almacen2\n");
           sem_post(&huecos2);                         // Postear huecos2
         }
         else{
           sem_post(&huecos2);                         // Postear huecos2
-          if(tBarnizado<TP2+TDEFBAR){                 // Si se sobrepasa del tiempo maximo   
+          if(tBarnizado>TP2+TDEFBAR){                 // Si se sobrepasa del tiempo maximo   
             pthread_mutex_lock(&nEntradas_mutex);     // Bloquear zona critica       
             nEntradas--;                              // Descartar de nEntradas
             pthread_mutex_unlock(&nEntradas_mutex);   //Desbloquear zona critica
@@ -204,6 +203,7 @@ void *barnSec2 (void *args){
           }
           else {
             pieza.tBarnizado = tBarnizado;            // Anyadir tBarnizado a pieza
+            pieza.tEntrada = getCurrentMicroseconds();
           	sem_wait(&huecos3);                       // Esperar a que haya hueco en almazen3
             err3 = put_item(pieza,&almacen3);         // Poner piezas en almecen2
             if(err3==-1){
@@ -211,53 +211,15 @@ void *barnSec2 (void *args){
               sem_post(&piezas3);                     // Postear piezas3
             }
             else{
-              pieza.tEntrada = getCurrentMicroseconds();
               sem_post(&piezas3);                     // Postear piezas3
             }
           }
         }
-      }
-    }
+      }//if
+    }//end_err1
     usleep(500000);    
   }//end_while
 }
-
-/*
-
-void *barnizadoSecado1(void *arg){
-  pieza pieza;
-  float tBarnizado;
-
-  while(1){
-    sem_wait(&prod1);
-    consult(&pieza,&almacen1);
-    sem_post(&prod1);
-    tBarnizado = (getCurrentMicroseconds()-pieza.tIN)/MS2S;
-    if (tBarnizado >= tp1) {
-      sem_wait(&prod1);
-      get_item(&pieza,&almacen1);
-      sem_post(&huecos1);
-      if (tBarnizado > tp1+tmaxB){
-	pthread_mutex_lock(&conEntrada_lock);
-	conEntrada--;
-	pthread_mutex_unlock(&conEntrada_lock);
-	pthread_mutex_lock(&conDescar_lock);
-	conDescar++;
-	pthread_mutex_unlock(&conDescar_lock);
-      }
-      else{
-	pieza.tBarnizado = tBarnizado;
-	pieza.tIN = getCurrentMicroseconds();
-	sem_wait(&huecos3);
-	put_item(pieza,&almacen3);
-	sem_post(&prod3);
-      }
-    }
-    usleep(500000);
-  }
-}
-
-*/
 
 int main()
 {
@@ -284,9 +246,9 @@ int main()
 
   pthread_attr_init( &atrib );              // Iniciar atributo
 
-  pthread_create( &p1, &atrib, generaPiezas1, NULL );
+//  pthread_create( &p1, &atrib, generaPiezas1, NULL );
   pthread_create( &p2, &atrib, generaPiezas2, NULL );
-  pthread_create( &p3, &atrib, barnSec1, NULL );
+//  pthread_create( &p3, &atrib, barnSec1, NULL );
   pthread_create( &p4, &atrib, barnSec2, NULL );
 //  pthread_create( &p5, &atrib, Secador1, NULL );
 //  pthread_create( &p6, &atrib, Secador1, NULL );
@@ -296,7 +258,7 @@ int main()
 
 //  pthread_join( p7, NULL);                   // Acabar con los threads
 //  pthread_join( p8, NULL);
-  pthread_join(p3,NULL);
+  pthread_join(p2,NULL);
   pthread_join(p4,NULL);
 //  pthread_join( p3, NULL);
   
