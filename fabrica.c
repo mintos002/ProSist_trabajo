@@ -18,7 +18,7 @@
 #define TP4 2.0
 #define TP5 3.0
 #define TSTATUS 1.0     // Tiempo muestra de estado
-#define NUMPIEZAS 4    // Definir n piezas
+#define NUMPIEZAS 51    // Definir n piezas
 #define TDEFBAR 2.0     // Tiempo (seg) barnizado defectuoso
 #define TDEFSEC 4.0     // Tiempo (seg) secado defectuoso
 #define TDEFCOC 6.0     // Tiempo (seg) cocido defectuoso
@@ -70,6 +70,9 @@ void *printStatus(void *args){        // Mostrar el estado de los almacenes cada
     printf("---------------------------------------------------------------\n");
     printf("Numero de piezas defectuosas: %d\n", nDescartadas);
     printf("---------------------------------------------------------------\n");
+    printf("Numero de piezas generadas: %d\n", nEntradas);
+    printf("Numero de piezas salidas: %d\n", nSacadas);
+    printf("Numero de piezas defectuosas: %d\n", nDescartadas);
     
     sleep(TSTATUS);
   }
@@ -113,7 +116,9 @@ void *barnSec1 (void *args){
     }
     else{
       sem_post(&piezas1);                             // Postear pieza   
+      sem_wait(&huecos3);//////////////////////
       tBarnizado = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de barnizado en seg
+      sem_post(&huecos3);
       if(tBarnizado>=TP1){                            // No extraer la pieza hasta pasados TP1 seg     
         sem_wait(&piezas1);                           // Esperar piezas1
         err2 = get_item(&pieza,&almacen1);            // Sacar las pieza 
@@ -154,7 +159,7 @@ void *barnSec1 (void *args){
 void *productor2(void *args){                    // Generar piezas cada TG2 seg
   pieza pieza;
   int err;
-  while(nEntradas <= NUMPIEZAS){                     // Mientras queden piezas por generar
+  while(nEntradas < NUMPIEZAS){                     // Mientras queden piezas por generar
     pieza.linea = 2;                                // La pieza es de la linea 1
     pieza.tNacido = getCurrentMicroseconds();       // Iniciar t nacido
     pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
@@ -187,8 +192,10 @@ void *barnSec2 (void *args){
       sem_post(&piezas2);                             // Postear pieza
     }
     else{                                             // Si no hay error
-      sem_post(&piezas2);                             // Postear pieza   
+      sem_post(&piezas2);                             // Postear pieza 
+      sem_wait(&huecos3);//////////////////////  
       tBarnizado = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de barnizado en seg
+      sem_post(&huecos3);//////////////////////
       if(tBarnizado>=TP2){                            // No extraer la pieza hasta pasados TP1 seg     
         sem_wait(&piezas2);                           // Esperar piezas1
         err2 = get_item(&pieza,&almacen2);            // Sacar las pieza
@@ -238,8 +245,12 @@ void *secCoc12(void *args){
       sem_post(&piezas3);                             // Postear pieza
     }
     else{                                             // Si no hay error
-      sem_post(&piezas3);                             // Postear pieza   
+      sem_post(&piezas3);                             // Postear pieza 
+      if(pieza.linea==1){sem_wait(&huecos4);}//////////////////////////
+      if(pieza.linea==2){sem_wait(&huecos5);}
       tSecado = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de secado en seg
+      if(pieza.linea==1){sem_post(&huecos4);}
+      if(pieza.linea==2){sem_post(&huecos5);}////////////////////////////
       if(tSecado>=TP3){                            // No extraer la pieza hasta pasados TP1 seg     
         sem_wait(&piezas3);                           // Esperar piezas3
         err2 = get_item(&pieza,&almacen3);            // Sacar las pieza
@@ -294,7 +305,7 @@ void *consumidor1(void *args){
   pieza pieza;
   float tCocido;
   int err1,err2;
-  while(nSacadas<=NUMPIEZAS-1){                          // Mientras piezas extraidas no sea = a numero de piezas
+  while(nSacadas<=NUMPIEZAS-2){                          // Mientras piezas extraidas no sea = a numero de piezas
     sem_wait(&piezas4);                               // Esperar a que haya pieza
     err1 = obten_valor(&pieza,&almacen4);             // Obtener propiedades de la pieza
     if(err1==-1){                                     // Si hay error
@@ -345,14 +356,14 @@ void *consumidor1(void *args){
         }
       }
     } 
-  }
+  }printf("\n\n FIN consumidor1 \n\n");
 }
 
 void *consumidor2(void *args){
   pieza pieza;
   float tCocido;
   int err1,err2;
-  while(nSacadas<=NUMPIEZAS-1){                       // Mientras piezas extraidas no sea = a numero de piezas
+  while(nSacadas<=NUMPIEZAS-2){                       // Mientras piezas extraidas no sea = a numero de piezas
     sem_wait(&piezas5);                               // Esperar a que haya pieza
     err1 = obten_valor(&pieza,&almacen5);             // Obtener propiedades de la pieza
     if(err1==-1){                                     // Si hay error
@@ -402,7 +413,7 @@ void *consumidor2(void *args){
         }
       }
     }
-  }
+  }printf("\n\n FIN consumidor2 \n\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////7
