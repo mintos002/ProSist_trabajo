@@ -68,8 +68,6 @@ void *printStatus(void *args){        // Mostrar el estado de los almacenes cada
     printf("Almacen 5: ");
     print(&almacen5);
     printf("---------------------------------------------------------------\n");
-    printf("Numero de piezas generadas: %d\n", nEntradas);
-    printf("Numero de piezas salidas: %d\n", nSacadas);
     printf("Numero de piezas defectuosas: %d\n", nDescartadas);
     printf("---------------------------------------------------------------\n");
     
@@ -86,7 +84,7 @@ void *productor1(void *args){                    // Generar piezas cada TG1 seg
     pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
     pthread_mutex_lock(&nEntradas_mutex);            // Bloquear zona critica
     nEntradas++;                                    // Se genera otra pieza
-    sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distinguirla
+    sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distEntradaguirla
     pthread_mutex_unlock(&nEntradas_mutex);          // Desbloqueamos zona critica   
     sem_wait(&huecos1);                             // Esperar el hueco
     if(bc_lleno(&almacen1)){}
@@ -100,7 +98,6 @@ void *productor1(void *args){                    // Generar piezas cada TG1 seg
     }
     sleep(TG1);                                     // Espera para generar otra pieza
   }//end_while
-  printf("\n\n\n             FIN prod1            \n\n\n");
 }
 
 void *barnSec1 (void *args){
@@ -157,13 +154,13 @@ void *barnSec1 (void *args){
 void *productor2(void *args){                    // Generar piezas cada TG2 seg
   pieza pieza;
   int err;
-  while(nEntradas < NUMPIEZAS){                     // Mientras queden piezas por generar
+  while(nEntradas <= NUMPIEZAS){                     // Mientras queden piezas por generar
     pieza.linea = 2;                                // La pieza es de la linea 1
     pieza.tNacido = getCurrentMicroseconds();       // Iniciar t nacido
     pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
     pthread_mutex_lock(&nEntradas_mutex);           // Bloquear zona critica 
     nEntradas++;                                    // Se genera otra pieza
-    sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distinguirla 
+    sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distEntradaguirla 
     pthread_mutex_unlock(&nEntradas_mutex);         // Desbloquear zona critica
     sem_wait(&huecos2);                             // Esperar el hueco 
     err = put_item(pieza, &almacen2);               // Se inserta el dato en el almacen1
@@ -175,7 +172,7 @@ void *productor2(void *args){                    // Generar piezas cada TG2 seg
       sem_post(&piezas2);                           // Postear pieza
     }
     sleep(TG2);                                     // Espera para generar otra pieza
-  }printf("\n\n\n             FIN prod2            \n\n\n");
+  }
 }
 
 void *barnSec2 (void *args){
@@ -348,14 +345,14 @@ void *consumidor1(void *args){
         }
       }
     } 
-  }printf("\n\n\n             FIN consumidor1            \n\n\n");
+  }
 }
 
 void *consumidor2(void *args){
   pieza pieza;
   float tCocido;
   int err1,err2;
-  while(nSacadas<=NUMPIEZAS-2){                       // Mientras piezas extraidas no sea = a numero de piezas
+  while(nSacadas<=NUMPIEZAS-1){                       // Mientras piezas extraidas no sea = a numero de piezas
     sem_wait(&piezas5);                               // Esperar a que haya pieza
     err1 = obten_valor(&pieza,&almacen5);             // Obtener propiedades de la pieza
     if(err1==-1){                                     // Si hay error
@@ -388,7 +385,7 @@ void *consumidor2(void *args){
             pthread_mutex_unlock(&nSacadas_mutex);
             pieza.tCocido = tCocido;                  // Asignar tiempo de cocido
             pieza.tTotal = (getCurrentMicroseconds()-pieza.tNacido)/uS2S;  // Asignar tiempo total
-            if(pieza.tTotal>tpmax){
+            if(pieza.tTotal>tpmax){printf("\n\n             FIN consumidor2 asd            \n\n");
               pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
               tpmax=pieza.tTotal;                     // Actualizar tpmax
               pthread_mutex_unlock(&tiempos_mutex);//Desbloquear zona critica
@@ -404,10 +401,11 @@ void *consumidor2(void *args){
           }
         }
       }
-    }printf("%d",nSacadas);
-  }printf("\n\n             FIN consumidor2            \n\n");
+    }
+  }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////7
 int main()
 {
   initbuffer(&almacen1);                     // Iniciar buffer
@@ -440,7 +438,7 @@ int main()
   pthread_create( &p5p6, &atrib, secCoc12, NULL );
   pthread_create( &p7, &atrib, consumidor1, NULL );
   pthread_create( &p8, &atrib, consumidor2, NULL );
-//  pthread_create( &pStatus, &atrib, printStatus, NULL );
+  pthread_create( &pStatus, &atrib, printStatus, NULL );
 
 
   pthread_join( p7, NULL);                   // Acabar con los threads
@@ -448,12 +446,10 @@ int main()
   
   printf("                     FIN DE LA APLICACIÓN                      \n");
   printf("---------------------------------------------------------------\n");
-  printf("Numero de piezas generadas: %d\n", nEntradas);
-  printf("Numero de piezas salidas: %d\n", nSacadas);
   printf("Numero de piezas defectuosas: %d\n", nDescartadas);
-  printf("Tiempo maximo: %f\n seg", tpmax);
-  printf("Tiempo minimo: %f\n seg", tpmin);
-  printf("Tiempo medio: %f\n seg", tpsum/(float)NUMPIEZAS);
+  printf("Tiempo maximo: %f seg\n", tpmax);
+  printf("Tiempo minimo: %f seg\n", tpmin);
+  printf("Tiempo medio: %f seg\n", tpsum/NUMPIEZAS);
   
   return 0;
 }
