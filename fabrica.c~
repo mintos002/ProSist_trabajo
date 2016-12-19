@@ -14,11 +14,11 @@
 #define TG2 2.0
 #define TP1 5.0
 #define TP2 4.0
-#define TP3 10.0
-#define TP4 15.0
-#define TP5 13.0
+#define TP3 2.0
+#define TP4 2.0
+#define TP5 3.0
 #define TSTATUS 1.0     // Tiempo muestra de estado
-#define NUMPIEZAS 12    // Definir n piezas
+#define NUMPIEZAS 4    // Definir n piezas
 #define TDEFBAR 2.0     // Tiempo (seg) barnizado defectuoso
 #define TDEFSEC 4.0     // Tiempo (seg) secado defectuoso
 #define TDEFCOC 6.0     // Tiempo (seg) cocido defectuoso
@@ -35,6 +35,7 @@ int nDescartadas = 0;
 pthread_mutex_t nEntradas_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t nSacadas_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t nDescartadas_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t tiempos_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct Buffer_Circ almacen1, almacen2, almacen3, almacen4, almacen5; // Definir Buffer_Circ
 
@@ -67,6 +68,10 @@ void *printStatus(void *args){        // Mostrar el estado de los almacenes cada
     printf("Almacen 5: ");
     print(&almacen5);
     printf("---------------------------------------------------------------\n");
+    printf("Numero de piezas generadas: %d\n", nEntradas);
+    printf("Numero de piezas salidas: %d\n", nSacadas);
+    printf("Numero de piezas defectuosas: %d\n", nDescartadas);
+    printf("---------------------------------------------------------------\n");
     
     sleep(TSTATUS);
   }
@@ -95,6 +100,7 @@ void *productor1(void *args){                    // Generar piezas cada TG1 seg
     }
     sleep(TG1);                                     // Espera para generar otra pieza
   }//end_while
+  printf("\n\n\n             FIN prod1            \n\n\n");
 }
 
 void *barnSec1 (void *args){
@@ -169,7 +175,7 @@ void *productor2(void *args){                    // Generar piezas cada TG2 seg
       sem_post(&piezas2);                           // Postear pieza
     }
     sleep(TG2);                                     // Espera para generar otra pieza
-  }
+  }printf("\n\n\n             FIN prod2            \n\n\n");
 }
 
 void *barnSec2 (void *args){
@@ -246,6 +252,8 @@ void *secCoc12(void *args){
         }
         else{
           sem_post(&huecos3);                         // Postear huecos3
+          pieza.tSecado  = tSecado;                 // Anyadir tsecado a pieza
+          pieza.tEntrada = getCurrentMicroseconds();
           if(tSecado>TP3+TDEFSEC){                    // Si se sobrepasa del tiempo maximo   
             pthread_mutex_lock(&nEntradas_mutex);     // Bloquear zona critica       
             nEntradas--;                              // Descartar de nEntradas
@@ -255,9 +263,7 @@ void *secCoc12(void *args){
             pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
           }
           else {
-            pieza.tSecado  = tSecado;                 // Anyadir tsecado a pieza
-            pieza.tEntrada = getCurrentMicroseconds();
-            if(pieza.linea == 1){                     // Si pertenece a la 1a linea de produccion
+            if(pieza.linea == 1){                       // Si pertenece a la 1a linea de produccion
               sem_wait(&huecos4);                       // Esperar a que haya hueco en almazen3
               err3 = put_item(pieza,&almacen4);         // Poner piezas en almecen4
               if(err3==-1){
@@ -291,7 +297,7 @@ void *consumidor1(void *args){
   pieza pieza;
   float tCocido;
   int err1,err2;
-  while(nSacadas<NUMPIEZAS){                          // Mientras piezas extraidas no sea = a numero de piezas
+  while(nSacadas<=NUMPIEZAS-1){                          // Mientras piezas extraidas no sea = a numero de piezas
     sem_wait(&piezas4);                               // Esperar a que haya pieza
     err1 = obten_valor(&pieza,&almacen4);             // Obtener propiedades de la pieza
     if(err1==-1){                                     // Si hay error
@@ -300,16 +306,17 @@ void *consumidor1(void *args){
     }
     else{                                             // Si no hay error
       sem_post(&piezas4);                             // Postear pieza   
-      tCocido = (getCurrentMicroseconds()-pieza.tCocido)/uS2S;  // Sacar tiempo de cocido en seg
+      tCocido = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de cocido en seg
       if(tCocido>=TP4){                                // Si pieza cocixa
         sem_wait(&piezas4);                           // Esperamos a piezas4
         err2 = get_item(&pieza,&almacen4);            // Sacamos pieza del almacen
         if(err2==-1){                                 // Si hay error
           printf("ERROR: No se ha podido extraer la pieza en Almacen4\n");
-          sem_post(&piezas4);                         // Postear pieza
+          sem_post(&huecos4);                         // Postear pieza
         }
         else{
-          sem_post(&piezas4);                         // Postear pieza
+          sem_post(&huecos4);                         // Postear hueco
+          
           if(tCocido>TP4+TDEFCOC){                    // Si pieza pasa de defectuosa
             pthread_mutex_lock(&nEntradas_mutex);     // Bloquear zona critica       
             nEntradas--;                              // Descartar de nEntradas
@@ -325,24 +332,30 @@ void *consumidor1(void *args){
             pieza.tCocido = tCocido;                  // Asignar tiempo de cocido
             pieza.tTotal = (getCurrentMicroseconds()-pieza.tNacido)/uS2S;  // Asignar tiempo total
             if(pieza.tTotal>tpmax){
+              pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
               tpmax=pieza.tTotal;                     // Actualizar tpmax
+              pthread_mutex_unlock(&tiempos_mutex);//Desbloquear zona critica
             }
             if(pieza.tTotal<tpmin){
+              pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
               tpmin=pieza.tTotal;                     // Actualizar tpmin
+              pthread_mutex_unlock(&tiempos_mutex);//Desbloquear zona critica
             }
-            tpsum=tpmed+pieza.tTotal;                 // Actualizar tpsum
+            pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
+            tpsum=tpsum+pieza.tTotal;                 // Actualizar tpsum
+            pthread_mutex_unlock(&tiempos_mutex);//Desbloquear zona critica
           }
         }
       }
     } 
-  }
+  }printf("\n\n\n             FIN consumidor1            \n\n\n");
 }
 
 void *consumidor2(void *args){
   pieza pieza;
   float tCocido;
   int err1,err2;
-  while(nSacadas<NUMPIEZAS){                          // Mientras piezas extraidas no sea = a numero de piezas
+  while(nSacadas<=NUMPIEZAS-2){                       // Mientras piezas extraidas no sea = a numero de piezas
     sem_wait(&piezas5);                               // Esperar a que haya pieza
     err1 = obten_valor(&pieza,&almacen5);             // Obtener propiedades de la pieza
     if(err1==-1){                                     // Si hay error
@@ -351,16 +364,16 @@ void *consumidor2(void *args){
     }
     else{                                             // Si no hay error
       sem_post(&piezas5);                             // Postear pieza   
-      tCocido = (getCurrentMicroseconds()-pieza.tCocido)/uS2S;  // Sacar tiempo de cocido en seg
+      tCocido = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de cocido en seg
       if(tCocido>=TP5){                               // Si pieza cocixa
         sem_wait(&piezas5);                           // Esperamos a piezas5
         err2 = get_item(&pieza,&almacen5);             // Sacamos pieza del almacen
         if(err2==-1){                                 // Si hay error
-          printf("ERROR: No se ha podido extraer la pieza en Almacen4\n");
-          sem_post(&piezas5);                         // Postear pieza
+          printf("ERROR: No se ha podido extraer la pieza en Almacen5\n");
+          sem_post(&huecos5);                         // Postear pieza
         }
         else{
-          sem_post(&piezas5);                         // Postear pieza
+          sem_post(&huecos5);                         // Postear pieza
           if(tCocido>TP5+TDEFCOC){                    // Si pieza pasa de defectuosa
             pthread_mutex_lock(&nEntradas_mutex);     // Bloquear zona critica       
             nEntradas--;                              // Descartar de nEntradas
@@ -376,17 +389,23 @@ void *consumidor2(void *args){
             pieza.tCocido = tCocido;                  // Asignar tiempo de cocido
             pieza.tTotal = (getCurrentMicroseconds()-pieza.tNacido)/uS2S;  // Asignar tiempo total
             if(pieza.tTotal>tpmax){
+              pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
               tpmax=pieza.tTotal;                     // Actualizar tpmax
+              pthread_mutex_unlock(&tiempos_mutex);//Desbloquear zona critica
             }
             if(pieza.tTotal<tpmin){
+              pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
               tpmin=pieza.tTotal;                     // Actualizar tpmin
+              pthread_mutex_unlock(&tiempos_mutex);//Desbloquear zona critica
             }
-            tpsum=tpmed+pieza.tTotal;                 // Actualizar tpsum
+            pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
+            tpsum=tpsum+pieza.tTotal;                 // Actualizar tpsum
+            pthread_mutex_unlock(&tiempos_mutex);//Desbloquear zona critica
           }
         }
       }
-    } 
-  }
+    }printf("%d",nSacadas);
+  }printf("\n\n             FIN consumidor2            \n\n");
 }
 
 int main()
@@ -421,19 +440,20 @@ int main()
   pthread_create( &p5p6, &atrib, secCoc12, NULL );
   pthread_create( &p7, &atrib, consumidor1, NULL );
   pthread_create( &p8, &atrib, consumidor2, NULL );
-  pthread_create( &pStatus, &atrib, printStatus, NULL );
+//  pthread_create( &pStatus, &atrib, printStatus, NULL );
+
 
   pthread_join( p7, NULL);                   // Acabar con los threads
   pthread_join( p8, NULL);
   
   printf("                     FIN DE LA APLICACIÓN                      \n");
   printf("---------------------------------------------------------------\n");
-  printf("Numero de piezas generadas: %d", nEntradas);
-  printf("Numero de piezas salidas: %d", nSacadas);
-  printf("Numero de piezas defectuosas: %d", nDescartadas);
-  printf("Tiempo maximo: %f", tpmax);
-  printf("Tiempo minimo: %f", tpmin);
-  printf("Tiempo medio: %f", tpsum/NUMPIEZAS);
+  printf("Numero de piezas generadas: %d\n", nEntradas);
+  printf("Numero de piezas salidas: %d\n", nSacadas);
+  printf("Numero de piezas defectuosas: %d\n", nDescartadas);
+  printf("Tiempo maximo: %f\n seg", tpmax);
+  printf("Tiempo minimo: %f\n seg", tpmin);
+  printf("Tiempo medio: %f\n seg", tpsum/(float)NUMPIEZAS);
   
   return 0;
 }
