@@ -141,7 +141,7 @@ int obten_valor (pieza *x, struct Buffer_Circ *buff){   // Obtener el último va
     return -1;                                // Devolver -1 -> NOT OK
   }
   else {
-    *x = (*buff).buffer[bufOUT];
+    *x = (*buff).buffer[(*buff).bufOUT];
     /*CON MUTEX:*/                            //-----------------------------
     pthread_mutex_unlock(&buffer_lock);       // Desbloquear mutex
     return 0;                                 // Devolver 0 -> OK
