@@ -4,13 +4,6 @@
 #include "piezas.h"
 #include "buffer_circ.h"
 
-
-
-//#define BUFSIZE 10  // Tamaño de buff_circular
-//int ok;             // definir ok 
-
-//pthread_mutex_t buffer_lock = PTHREAD_MUTEX_INITIALIZER; // Iniciar mutex
-
 struct Buffer_Circ {  // Definir estructura Buffer_Circ
   pieza buffer[BUFSIZE];
   int bufIN, bufOUT;
