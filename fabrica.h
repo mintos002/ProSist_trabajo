@@ -3,13 +3,13 @@
 
 #define TG1 3.0         // Definir tiempos
 #define TG2 2.0
-#define TP1 5.0
-#define TP2 4.0
-#define TP3 2.0
-#define TP4 2.0
-#define TP5 3.0
+#define TP1 1.0
+#define TP2 0.5
+#define TP3 13.0
+#define TP4 17.0
+#define TP5 20.0
 #define TSTATUS 1.0     // Tiempo muestra de estado
-#define NUMPIEZAS 51    // Definir n piezas
+#define NUMPIEZAS 10    // Definir n piezas
 #define TDEFBAR 2.0     // Tiempo (seg) barnizado defectuoso
 #define TDEFSEC 4.0     // Tiempo (seg) secado defectuoso
 #define TDEFCOC 6.0     // Tiempo (seg) cocido defectuoso

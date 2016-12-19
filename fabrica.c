@@ -55,8 +55,9 @@ void *productor1(void *args){                    // Generar piezas cada TG1 seg
     pieza.tNacido = getCurrentMicroseconds();       // Iniciar t nacido
     pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
     pthread_mutex_lock(&nEntradas_mutex);            // Bloquear zona critica
-    nEntradas++;                                    // Se genera otra pieza
+    //nEntradas++;                                    // Se genera otra pieza
     sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distEntradaguirla
+    nEntradas++;//////////////////////7
     pthread_mutex_unlock(&nEntradas_mutex);          // Desbloqueamos zona critica   
     sem_wait(&huecos1);                             // Esperar el hueco
     if(bc_lleno(&almacen1)){}
@@ -85,7 +86,7 @@ void *barnSec1 (void *args){
     }
     else{
       sem_post(&piezas1);                             // Postear pieza   
-      sem_wait(&huecos3);//////////////////////
+      sem_wait(&huecos3);
       tBarnizado = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de barnizado en seg
       sem_post(&huecos3);
       if(tBarnizado>=TP1){                            // No extraer la pieza hasta pasados TP1 seg     
@@ -104,11 +105,12 @@ void *barnSec1 (void *args){
             pthread_mutex_lock(&nDescartadas_mutex);  // Bloquear zona critica
             nDescartadas++;                           // Anyadir a nDescartadas
             pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
+      //      sem_post(&piezas3);////////////////////////////
           }
           else{
             pieza.tBarnizado = tBarnizado;            // Anyadir tBarnizado a pieza
             pieza.tEntrada = getCurrentMicroseconds();
-            sem_wait(&huecos3);                       // Esperar a que haya hueco en almazen3
+            sem_wait(&huecos3);  /////////////////////                     // Esperar a que haya hueco en almazen3
             err3 = put_item(pieza,&almacen3);         // Poner piezas en almecen2
             if(err3==-1){
               printf("ERROR: No se ha podido insertar la pieza en Almacen3\n");
@@ -133,8 +135,10 @@ void *productor2(void *args){                    // Generar piezas cada TG2 seg
     pieza.tNacido = getCurrentMicroseconds();       // Iniciar t nacido
     pieza.tEntrada = getCurrentMicroseconds();      // Iniciar t entrada
     pthread_mutex_lock(&nEntradas_mutex);           // Bloquear zona critica 
-    nEntradas++;                                    // Se genera otra pieza
+    //nEntradas++;                                    // Se genera otra pieza
     sprintf(pieza.nombre, "pieza_#%d", nEntradas);  // Nombramos la pieza para distEntradaguirla 
+    nEntradas++;/////////////////////////
+    
     pthread_mutex_unlock(&nEntradas_mutex);         // Desbloquear zona critica
     sem_wait(&huecos2);                             // Esperar el hueco 
     err = put_item(pieza, &almacen2);               // Se inserta el dato en el almacen1
@@ -181,11 +185,12 @@ void *barnSec2 (void *args){
             pthread_mutex_lock(&nDescartadas_mutex);  // Bloquear zona critica
             nDescartadas++;                           // Anyadir a nDescartadas
             pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
+      //      sem_post(&piezas3);///////////////////////////////
           }
           else {
             pieza.tBarnizado = tBarnizado;            // Anyadir tBarnizado a pieza
             pieza.tEntrada = getCurrentMicroseconds();
-          	sem_wait(&huecos3);                       // Esperar a que haya hueco en almazen3
+          	sem_wait(&huecos3);//////////////                       // Esperar a que haya hueco en almazen3
             err3 = put_item(pieza,&almacen3);         // Poner piezas en almecen2
             if(err3==-1){
               printf("ERROR: No se ha podido insertar la pieza en Almacen3\n");
@@ -238,10 +243,12 @@ void *secCoc12(void *args){
             pthread_mutex_lock(&nDescartadas_mutex);  // Bloquear zona critica
             nDescartadas++;                           // Anyadir a nDescartadas
             pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
+      //      if(pieza.linea==1){sem_post(&piezas4);}////////////////////////////
+      //      if(pieza.linea==2){sem_post(&piezas5);}////////////////////////////
           }
           else {
             if(pieza.linea == 1){                       // Si pertenece a la 1a linea de produccion
-              sem_wait(&huecos4);                       // Esperar a que haya hueco en almazen3
+              sem_wait(&huecos4);////////                       // Esperar a que haya hueco en almazen3
               err3 = put_item(pieza,&almacen4);         // Poner piezas en almecen4
               if(err3==-1){
                printf("ERROR: No se ha podido insertar la pieza en Almacen4\n");
@@ -252,7 +259,7 @@ void *secCoc12(void *args){
               }
             }
             else if(pieza.linea==2){
-              sem_wait(&huecos5);                       // Esperar a que haya hueco en almazen3
+              sem_wait(&huecos5);//////////////                       // Esperar a que haya hueco en almazen3
               err3 = put_item(pieza,&almacen5);         // Poner piezas en almecen5
               if(err3==-1){
                 printf("ERROR: No se ha podido insertar la pieza en Almacen3\n");
@@ -274,7 +281,7 @@ void *consumidor1(void *args){
   pieza pieza;
   float tCocido;
   int err1,err2;
-  while(nSacadas<=NUMPIEZAS-2){                          // Mientras piezas extraidas no sea = a numero de piezas
+  while(nSacadas<=NUMPIEZAS-1){                       // Mientras piezas extraidas no sea = a numero de piezas
     sem_wait(&piezas4);                               // Esperar a que haya pieza
     err1 = obten_valor(&pieza,&almacen4);             // Obtener propiedades de la pieza
     if(err1==-1){                                     // Si hay error
@@ -282,16 +289,19 @@ void *consumidor1(void *args){
       sem_post(&piezas4);                             // Postear pieza
     }
     else{                                             // Si no hay error
+    printf("\n\n 00 consumidor1 \n\n");
       sem_post(&piezas4);                             // Postear pieza   
       tCocido = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de cocido en seg
       if(tCocido>=TP4){                                // Si pieza cocixa
         sem_wait(&piezas4);                           // Esperamos a piezas4
         err2 = get_item(&pieza,&almacen4);            // Sacamos pieza del almacen
+        printf("\n\n 11 consumidor1 \n\n");
         if(err2==-1){                                 // Si hay error
           printf("ERROR: No se ha podido extraer la pieza en Almacen4\n");
           sem_post(&huecos4);                         // Postear pieza
         }
         else{
+        
           sem_post(&huecos4);                         // Postear hueco
           
           if(tCocido>TP4+TDEFCOC){                    // Si pieza pasa de defectuosa
@@ -301,12 +311,14 @@ void *consumidor1(void *args){
             pthread_mutex_lock(&nDescartadas_mutex);  // Bloquear zona critica
             nDescartadas++;                           // Anyadir a nDescartadas
             pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
+            printf("\n\n 22 consumidor1 \n\n");
           }
           else{
             pthread_mutex_lock(&nSacadas_mutex);      // Bloquear zona critica
             nSacadas++;                               // Incrementar n piezas sacadas
             pthread_mutex_unlock(&nSacadas_mutex);
             pieza.tCocido = tCocido;                  // Asignar tiempo de cocido
+            printf("\n\n 33 consumidor1 \n\n");
             pieza.tTotal = (getCurrentMicroseconds()-pieza.tNacido)/uS2S;  // Asignar tiempo total
             if(pieza.tTotal>tpmax){
               pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
@@ -324,7 +336,7 @@ void *consumidor1(void *args){
           }
         }
       }
-    } 
+    } usleep(500000);
   }printf("\n\n FIN consumidor1 \n\n");
 }
 
@@ -332,7 +344,7 @@ void *consumidor2(void *args){
   pieza pieza;
   float tCocido;
   int err1,err2;
-  while(nSacadas<=NUMPIEZAS-2){                       // Mientras piezas extraidas no sea = a numero de piezas
+  while(nSacadas<=NUMPIEZAS-1){                       // Mientras piezas extraidas no sea = a numero de piezas
     sem_wait(&piezas5);                               // Esperar a que haya pieza
     err1 = obten_valor(&pieza,&almacen5);             // Obtener propiedades de la pieza
     if(err1==-1){                                     // Si hay error
@@ -340,11 +352,13 @@ void *consumidor2(void *args){
       sem_post(&piezas5);                             // Postear pieza
     }
     else{                                             // Si no hay error
+      printf("\n\n 00 consumidor2 \n\n");
       sem_post(&piezas5);                             // Postear pieza   
       tCocido = (getCurrentMicroseconds()-pieza.tEntrada)/uS2S;  // Sacar tiempo de cocido en seg
       if(tCocido>=TP5){                               // Si pieza cocixa
         sem_wait(&piezas5);                           // Esperamos a piezas5
         err2 = get_item(&pieza,&almacen5);             // Sacamos pieza del almacen
+        printf("\n\n 11 consumidor2 \n\n");
         if(err2==-1){                                 // Si hay error
           printf("ERROR: No se ha podido extraer la pieza en Almacen5\n");
           sem_post(&huecos5);                         // Postear pieza
@@ -358,12 +372,14 @@ void *consumidor2(void *args){
             pthread_mutex_lock(&nDescartadas_mutex);  // Bloquear zona critica
             nDescartadas++;                           // Anyadir a nDescartadas
             pthread_mutex_unlock(&nDescartadas_mutex);//Desbloquear zona critica
+            printf("\n\n 22 consumidor2 \n\n");
           }
           else{
             pthread_mutex_lock(&nSacadas_mutex);      // Bloquear zona critica
             nSacadas++;                               // Incrementar n piezas sacadas
             pthread_mutex_unlock(&nSacadas_mutex);
             pieza.tCocido = tCocido;                  // Asignar tiempo de cocido
+            printf("\n\n 33 consumidor2 \n\n");
             pieza.tTotal = (getCurrentMicroseconds()-pieza.tNacido)/uS2S;  // Asignar tiempo total
             if(pieza.tTotal>tpmax){
               pthread_mutex_lock(&tiempos_mutex);     // Bloquear zona critica
@@ -381,7 +397,7 @@ void *consumidor2(void *args){
           }
         }
       }
-    }
+    }usleep(500000);
   }printf("\n\n FIN consumidor2 \n\n");
 }
 
@@ -394,16 +410,16 @@ int main()
   initbuffer(&almacen4);                     // Iniciar buffer
   initbuffer(&almacen5);                     // Iniciar buffer
  
-  sem_init(&huecos1,0,BUFSIZE);
-  sem_init(&huecos2,0,BUFSIZE);
-  sem_init(&huecos3,0,BUFSIZE);
-  sem_init(&huecos4,0,BUFSIZE);
-  sem_init(&huecos5,0,BUFSIZE);
-  sem_init(&piezas1,0,0);
-  sem_init(&piezas2,0,0);
-  sem_init(&piezas3,0,0);
-  sem_init(&piezas4,0,0);
-  sem_init(&piezas5,0,0);
+  sem_init(&huecos1, 0, BUFSIZE);
+  sem_init(&huecos2, 0, BUFSIZE);
+  sem_init(&huecos3, 0, BUFSIZE);
+  sem_init(&huecos4, 0, BUFSIZE);
+  sem_init(&huecos5, 0, BUFSIZE);
+  sem_init(&piezas1, 0, 0);
+  sem_init(&piezas2, 0, 0);
+  sem_init(&piezas3, 0, 0);
+  sem_init(&piezas4, 0, 0);
+  sem_init(&piezas5, 0, 0);
  
   pthread_attr_t atrib;                     //Crear atributo
  
